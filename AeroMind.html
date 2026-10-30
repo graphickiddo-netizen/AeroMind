@@ -1,0 +1,1292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AeroMind — Pilot Mood & Flight Risk Assessment</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --bg:#020408;--surface:#080d14;--panel:#0c1420;--border:rgba(0,200,255,0.12);
+  --cyan:#00d4ff;--cyan-dim:rgba(0,212,255,0.15);--cyan-glow:rgba(0,212,255,0.4);
+  --green:#00ff88;--green-dim:rgba(0,255,136,0.12);--purple:#a855f7;
+  --orange:#ff6b35;--red:#ff4466;--yellow:#fbbf24;
+  --text:#e8f4ff;--muted:#5a7a99;
+  --font-head:'Syne',sans-serif;--font-mono:'Space Mono',monospace;
+}
+html{scroll-behavior:smooth;}
+body{background:var(--bg);color:var(--text);font-family:var(--font-head);overflow-x:hidden;cursor:none;}
+#cursor{position:fixed;width:12px;height:12px;background:var(--cyan);border-radius:50%;pointer-events:none;z-index:9999;transform:translate(-50%,-50%);transition:transform 0.1s,width 0.2s,height 0.2s,background 0.2s;mix-blend-mode:screen;}
+#cursor-ring{position:fixed;width:36px;height:36px;border:1.5px solid var(--cyan-glow);border-radius:50%;pointer-events:none;z-index:9998;transform:translate(-50%,-50%);transition:transform 0.18s ease,width 0.25s,height 0.25s;}
+body:has(a:hover) #cursor,body:has(button:hover) #cursor{width:20px;height:20px;background:var(--green);}
+body:has(a:hover) #cursor-ring,body:has(button:hover) #cursor-ring{width:54px;height:54px;border-color:var(--green);}
+#grid-bg{position:fixed;inset:0;z-index:0;pointer-events:none;background-image:linear-gradient(rgba(0,212,255,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,0.03) 1px,transparent 1px);background-size:60px 60px;animation:gridShift 20s linear infinite;}
+@keyframes gridShift{from{background-position:0 0}to{background-position:60px 60px}}
+.orb{position:fixed;border-radius:50%;pointer-events:none;z-index:0;filter:blur(80px);opacity:0.18;}
+.orb-1{width:600px;height:600px;background:var(--cyan);top:-200px;left:-200px;animation:orbFloat1 18s ease-in-out infinite;}
+.orb-2{width:500px;height:500px;background:var(--purple);bottom:-150px;right:-150px;animation:orbFloat2 22s ease-in-out infinite;}
+.orb-3{width:300px;height:300px;background:var(--green);top:40%;left:60%;animation:orbFloat3 15s ease-in-out infinite;}
+@keyframes orbFloat1{0%,100%{transform:translate(0,0)}50%{transform:translate(80px,60px)}}
+@keyframes orbFloat2{0%,100%{transform:translate(0,0)}50%{transform:translate(-70px,-50px)}}
+@keyframes orbFloat3{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-40px,30px) scale(1.2)}}
+.page{position:relative;z-index:2;}
+
+/* ═══ NAVBAR ═══ */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:0 48px;height:72px;background:rgba(2,4,8,0.7);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);animation:slideDown 0.8s ease both;}
+@keyframes slideDown{from{transform:translateY(-100%);opacity:0}to{transform:translateY(0);opacity:1}}
+.nav-logo{display:flex;align-items:center;gap:12px;font-size:20px;font-weight:800;letter-spacing:-0.5px;}
+.logo-icon{width:36px;height:36px;background:linear-gradient(135deg,var(--cyan),var(--purple));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;position:relative;overflow:hidden;}
+.logo-icon::after{content:'';position:absolute;inset:0;background:linear-gradient(45deg,transparent 40%,rgba(255,255,255,0.15) 50%,transparent 60%);animation:shimmer 3s infinite;}
+@keyframes shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+.nav-links{display:flex;gap:36px;}
+.nav-links a{color:var(--muted);text-decoration:none;font-size:14px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;transition:color 0.2s;position:relative;cursor:none;}
+.nav-links a::after{content:'';position:absolute;bottom:-4px;left:0;width:0;height:1px;background:var(--cyan);transition:width 0.3s;}
+.nav-links a:hover{color:var(--cyan);}
+.nav-links a:hover::after{width:100%;}
+.nav-btn{padding:10px 24px;border:1px solid var(--cyan);background:var(--cyan-dim);color:var(--cyan);border-radius:8px;font-family:var(--font-head);font-size:13px;font-weight:700;cursor:none;letter-spacing:0.08em;text-transform:uppercase;transition:all 0.25s;}
+.nav-btn:hover{background:var(--cyan);color:var(--bg);box-shadow:0 0 30px var(--cyan-glow);}
+.nav-user-info{display:flex;align-items:center;gap:12px;}
+.nav-user-badge{font-family:var(--font-mono);font-size:12px;color:var(--cyan);background:var(--cyan-dim);border:1px solid var(--border);border-radius:100px;padding:6px 14px;}
+
+/* ═══ AUTH OVERLAY ═══ */
+#auth-overlay{position:fixed;inset:0;z-index:500;display:flex;align-items:center;justify-content:center;background:rgba(2,4,8,0.96);backdrop-filter:blur(20px);}
+.auth-box{width:480px;max-width:90vw;background:var(--panel);border:1px solid var(--border);border-radius:24px;overflow:hidden;animation:fadeUp 0.5s ease;}
+.auth-header{padding:36px 40px 28px;border-bottom:1px solid var(--border);background:var(--surface);}
+.auth-logo{display:flex;align-items:center;gap:12px;margin-bottom:24px;}
+.auth-logo .logo-icon{width:44px;height:44px;font-size:20px;}
+.auth-logo span{font-size:22px;font-weight:800;}
+.auth-tabs{display:flex;gap:0;background:rgba(0,0,0,0.3);border-radius:10px;padding:4px;}
+.auth-tab{flex:1;padding:10px;border:none;background:transparent;color:var(--muted);font-family:var(--font-head);font-size:14px;font-weight:700;cursor:none;border-radius:8px;transition:all 0.25s;letter-spacing:0.05em;}
+.auth-tab.active{background:var(--cyan);color:var(--bg);}
+.auth-body{padding:32px 40px;}
+.auth-field{margin-bottom:20px;}
+.auth-label{font-family:var(--font-mono);font-size:11px;color:var(--cyan);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px;display:block;}
+.auth-input{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:13px 16px;font-family:var(--font-mono);font-size:13px;color:var(--text);outline:none;transition:border-color 0.2s;}
+.auth-input:focus{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(0,212,255,0.08);}
+.auth-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.auth-submit{width:100%;padding:15px;background:var(--cyan);color:var(--bg);border:none;border-radius:12px;font-family:var(--font-head);font-size:15px;font-weight:800;cursor:none;letter-spacing:0.05em;text-transform:uppercase;transition:all 0.25s;margin-top:8px;}
+.auth-submit:hover{transform:translateY(-2px);box-shadow:0 16px 40px var(--cyan-glow);}
+.auth-disclaimer{font-family:var(--font-mono);font-size:11px;color:var(--muted);text-align:center;margin-top:16px;line-height:1.7;}
+.auth-error{background:rgba(255,68,102,0.1);border:1px solid rgba(255,68,102,0.3);border-radius:8px;padding:12px 16px;font-family:var(--font-mono);font-size:12px;color:var(--red);margin-bottom:16px;display:none;}
+
+/* ═══ HERO ═══ */
+.hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:120px 48px 80px;text-align:center;position:relative;}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;padding:8px 20px;border:1px solid var(--border);background:var(--cyan-dim);border-radius:100px;font-family:var(--font-mono);font-size:12px;color:var(--cyan);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:40px;animation:fadeUp 0.8s 0.2s ease both;}
+.badge-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.5;transform:scale(0.8)}}
+.hero h1{font-size:clamp(44px,8vw,100px);font-weight:800;line-height:0.95;letter-spacing:-0.04em;animation:fadeUp 0.8s 0.4s ease both;}
+.hero h1 .line-1{display:block;color:var(--text);}
+.hero h1 .line-2{display:block;background:linear-gradient(90deg,var(--cyan),var(--purple),var(--green));background-size:200% auto;-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:fadeUp 0.8s 0.4s ease both,textFlow 4s linear infinite;}
+@keyframes textFlow{0%{background-position:0%}100%{background-position:200%}}
+.hero-sub{max-width:620px;margin:32px auto 0;font-size:17px;line-height:1.8;color:var(--muted);font-family:var(--font-mono);font-weight:400;animation:fadeUp 0.8s 0.6s ease both;}
+.hero-actions{display:flex;gap:16px;justify-content:center;margin-top:52px;animation:fadeUp 0.8s 0.8s ease both;}
+.btn-primary{padding:16px 40px;background:var(--cyan);color:var(--bg);border:none;border-radius:12px;font-family:var(--font-head);font-size:15px;font-weight:800;cursor:none;letter-spacing:0.05em;text-transform:uppercase;transition:all 0.25s;position:relative;overflow:hidden;}
+.btn-primary:hover{transform:translateY(-3px);box-shadow:0 20px 60px var(--cyan-glow);}
+.btn-secondary{padding:16px 40px;background:transparent;color:var(--text);border:1px solid var(--border);border-radius:12px;font-family:var(--font-head);font-size:15px;font-weight:700;cursor:none;letter-spacing:0.05em;text-transform:uppercase;transition:all 0.25s;}
+.btn-secondary:hover{border-color:var(--cyan);color:var(--cyan);background:var(--cyan-dim);}
+.scroll-hint{position:absolute;bottom:40px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--muted);font-family:var(--font-mono);font-size:11px;letter-spacing:0.15em;text-transform:uppercase;animation:fadeUp 1s 1.2s ease both;}
+.scroll-line{width:1px;height:48px;background:linear-gradient(var(--cyan),transparent);animation:scrollPulse 2s ease-in-out infinite;}
+@keyframes scrollPulse{0%,100%{opacity:0.3}50%{opacity:1}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
+
+/* ═══ STATS BAR ═══ */
+.stats-bar{display:flex;justify-content:center;gap:0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);background:var(--surface);overflow:hidden;}
+.stat-item{flex:1;max-width:280px;padding:36px 48px;text-align:center;border-right:1px solid var(--border);position:relative;overflow:hidden;transition:background 0.3s;}
+.stat-item:last-child{border-right:none;}
+.stat-item:hover{background:var(--cyan-dim);}
+.stat-item::before{content:'';position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:0;height:2px;background:var(--cyan);transition:width 0.4s;}
+.stat-item:hover::before{width:80%;}
+.stat-number{font-size:44px;font-weight:800;letter-spacing:-0.03em;background:linear-gradient(135deg,var(--cyan),var(--green));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.stat-label{font-family:var(--font-mono);font-size:12px;color:var(--muted);margin-top:6px;letter-spacing:0.1em;text-transform:uppercase;}
+
+/* ═══ SECTIONS ═══ */
+section{padding:120px 48px;position:relative;}
+.section-tag{display:inline-block;font-family:var(--font-mono);font-size:12px;color:var(--cyan);letter-spacing:0.2em;text-transform:uppercase;margin-bottom:20px;}
+.section-title{font-size:clamp(32px,4vw,52px);font-weight:800;letter-spacing:-0.03em;line-height:1.1;max-width:700px;}
+.section-title span{color:var(--cyan);}
+.section-sub{font-family:var(--font-mono);color:var(--muted);font-size:15px;line-height:1.8;max-width:560px;margin-top:20px;}
+
+/* ═══ DOMAINS ═══ */
+#domains{background:var(--surface);}
+.features-header{text-align:center;margin-bottom:80px;}
+.features-header .section-title{max-width:100%;}
+.features-header .section-sub{margin:20px auto 0;}
+.features-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;max-width:1200px;margin:0 auto;background:var(--border);border:1px solid var(--border);border-radius:16px;overflow:hidden;}
+.feature-card{background:var(--panel);padding:48px 40px;position:relative;overflow:hidden;transition:background 0.3s;}
+.feature-card:hover{background:#0f1c2e;}
+.feature-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);opacity:0;transition:opacity 0.4s;}
+.feature-card:hover::before{opacity:1;}
+.feature-icon{width:56px;height:56px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;margin-bottom:28px;}
+.feature-icon.c{background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.2);}
+.feature-icon.g{background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.2);}
+.feature-icon.p{background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.2);}
+.feature-icon.o{background:rgba(255,107,53,0.1);border:1px solid rgba(255,107,53,0.2);}
+.feature-title{font-size:20px;font-weight:700;margin-bottom:12px;}
+.feature-desc{font-family:var(--font-mono);font-size:14px;color:var(--muted);line-height:1.8;}
+.feature-tag{display:inline-block;margin-top:20px;padding:4px 12px;border-radius:100px;font-family:var(--font-mono);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;}
+.tag-c{background:rgba(0,212,255,0.1);color:var(--cyan);}
+.tag-g{background:rgba(0,255,136,0.1);color:var(--green);}
+.tag-p{background:rgba(168,85,247,0.1);color:var(--purple);}
+.tag-o{background:rgba(255,107,53,0.1);color:var(--orange);}
+.tag-r{background:rgba(255,68,102,0.1);color:var(--red);}
+
+/* ═══ ASSESSMENT ═══ */
+#assessment{background:var(--bg);}
+.assess-layout{display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:start;max-width:1200px;margin:0 auto;}
+.assess-panel{background:var(--panel);border:1px solid var(--border);border-radius:20px;overflow:hidden;}
+.assess-header{padding:24px 32px;border-bottom:1px solid var(--border);background:var(--surface);display:flex;align-items:center;gap:16px;}
+.assess-avatar{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,var(--cyan),var(--purple));display:flex;align-items:center;justify-content:center;font-size:18px;}
+.assess-title-text{font-weight:700;font-size:16px;}
+.assess-subtitle{font-family:var(--font-mono);font-size:11px;color:var(--green);}
+.assess-body{padding:28px 32px;}
+.input-group{margin-bottom:20px;}
+.input-label{font-family:var(--font-mono);font-size:11px;color:var(--cyan);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px;display:block;}
+.assess-input{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 16px;font-family:var(--font-mono);font-size:13px;color:var(--text);outline:none;transition:border-color 0.2s;}
+.assess-input:focus{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(0,212,255,0.08);}
+.input-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.progress-wrap{margin:24px 0 16px;}
+.progress-label{display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-bottom:8px;}
+.progress-track{height:4px;background:rgba(255,255,255,0.05);border-radius:100px;overflow:hidden;}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--cyan),var(--green));border-radius:100px;width:0%;transition:width 0.5s ease;}
+.question-block{display:none;}
+.question-block.active{display:block;animation:fadeUp 0.35s ease;}
+.q-domain{font-family:var(--font-mono);font-size:11px;color:var(--cyan);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:10px;}
+.q-text{font-size:16px;font-weight:600;line-height:1.6;margin-bottom:24px;}
+.q-scale{display:flex;gap:10px;justify-content:center;margin-bottom:12px;}
+.scale-btn{width:52px;height:52px;border-radius:12px;background:var(--surface);border:1px solid var(--border);color:var(--muted);font-family:var(--font-mono);font-size:16px;font-weight:700;cursor:none;transition:all 0.2s;display:flex;align-items:center;justify-content:center;}
+.scale-btn:hover{border-color:var(--cyan);color:var(--cyan);background:var(--cyan-dim);transform:translateY(-3px);}
+.scale-btn.selected{background:var(--cyan);color:var(--bg);border-color:var(--cyan);box-shadow:0 8px 24px var(--cyan-glow);transform:translateY(-3px);}
+.scale-labels{display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:10px;color:var(--muted);padding:0 4px;}
+.q-nav{display:flex;gap:12px;margin-top:24px;}
+.q-nav-btn{flex:1;padding:12px;border-radius:10px;font-family:var(--font-head);font-size:13px;font-weight:700;cursor:none;letter-spacing:0.05em;text-transform:uppercase;transition:all 0.2s;}
+.q-prev{background:transparent;border:1px solid var(--border);color:var(--muted);}
+.q-prev:hover{border-color:var(--cyan);color:var(--cyan);}
+.q-next{background:var(--cyan);border:none;color:var(--bg);}
+.q-next:hover{box-shadow:0 8px 30px var(--cyan-glow);transform:translateY(-2px);}
+.q-next:disabled{background:var(--border);color:var(--muted);cursor:default;transform:none;box-shadow:none;}
+
+/* alcohol warning */
+.alcohol-warning{background:rgba(255,107,53,0.08);border:1px solid rgba(255,107,53,0.25);border-radius:10px;padding:14px 16px;margin-top:16px;font-family:var(--font-mono);font-size:12px;color:var(--orange);line-height:1.7;display:none;}
+
+/* ═══ RESULTS ═══ */
+.result-panel{padding:28px 32px;}
+.fri-display{text-align:center;padding:32px 0;}
+.fri-score-big{font-size:80px;font-weight:800;letter-spacing:-0.05em;line-height:1;}
+.fri-label{font-family:var(--font-mono);font-size:13px;color:var(--muted);margin-top:8px;letter-spacing:0.1em;text-transform:uppercase;}
+.fri-status{display:inline-flex;align-items:center;gap:8px;padding:10px 24px;border-radius:100px;font-family:var(--font-mono);font-size:13px;font-weight:700;margin-top:16px;letter-spacing:0.08em;text-transform:uppercase;}
+.domain-results{margin:24px 0;}
+.dr-row{display:flex;align-items:center;gap:14px;margin-bottom:14px;}
+.dr-label{font-family:var(--font-mono);font-size:12px;color:var(--muted);width:90px;flex-shrink:0;}
+.dr-track{flex:1;height:6px;background:rgba(255,255,255,0.05);border-radius:100px;overflow:hidden;}
+.dr-fill{height:100%;border-radius:100px;background:linear-gradient(90deg,var(--cyan),var(--green));width:0%;transition:width 1.2s cubic-bezier(0.16,1,0.3,1);}
+.dr-val{font-family:var(--font-mono);font-size:12px;color:var(--cyan);width:32px;text-align:right;}
+.recommendation-box{background:var(--surface);border-radius:12px;padding:20px;border-left:3px solid var(--cyan);margin-top:20px;}
+.rec-title{font-family:var(--font-mono);font-size:11px;color:var(--cyan);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:10px;}
+.rec-text{font-family:var(--font-mono);font-size:13px;color:var(--muted);line-height:1.8;}
+.go-nogo{width:100%;padding:18px;border-radius:12px;border:none;font-family:var(--font-head);font-size:16px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;margin-top:20px;cursor:none;transition:all 0.3s;}
+.reset-btn{width:100%;padding:14px;border-radius:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:var(--font-head);font-size:14px;font-weight:600;cursor:none;margin-top:12px;transition:all 0.2s;letter-spacing:0.05em;text-transform:uppercase;}
+.reset-btn:hover{border-color:var(--cyan);color:var(--cyan);}
+
+/* ═══ CRASH REPORT ═══ */
+.crash-section{background:rgba(255,68,102,0.04);border:1px solid rgba(255,68,102,0.2);border-radius:12px;padding:20px;margin-top:20px;display:none;}
+.crash-header{display:flex;align-items:center;gap:10px;margin-bottom:16px;}
+.crash-header-icon{font-size:18px;}
+.crash-header-title{font-family:var(--font-mono);font-size:11px;color:var(--red);letter-spacing:0.15em;text-transform:uppercase;}
+.crash-item{padding:12px 0;border-bottom:1px solid rgba(255,68,102,0.1);}
+.crash-item:last-child{border-bottom:none;padding-bottom:0;}
+.crash-flight{font-size:14px;font-weight:700;color:var(--red);margin-bottom:4px;}
+.crash-desc{font-family:var(--font-mono);font-size:12px;color:var(--muted);line-height:1.7;}
+.crash-match{display:inline-block;margin-top:6px;padding:3px 10px;background:rgba(255,68,102,0.1);border-radius:100px;font-family:var(--font-mono);font-size:10px;color:var(--red);letter-spacing:0.08em;}
+
+/* ═══ ICAO/FAA VIOLATIONS ═══ */
+.violations-section{background:rgba(255,107,53,0.04);border:1px solid rgba(255,107,53,0.2);border-radius:12px;padding:20px;margin-top:16px;display:none;}
+.violations-header{font-family:var(--font-mono);font-size:11px;color:var(--orange);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:16px;}
+.violation-item{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid rgba(255,107,53,0.1);}
+.violation-item:last-child{border-bottom:none;padding-bottom:0;}
+.violation-badge{flex-shrink:0;padding:4px 10px;border-radius:6px;font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:0.08em;height:fit-content;margin-top:2px;}
+.badge-icao{background:rgba(0,212,255,0.1);color:var(--cyan);}
+.badge-faa{background:rgba(168,85,247,0.1);color:var(--purple);}
+.violation-text{font-family:var(--font-mono);font-size:12px;color:var(--muted);line-height:1.7;}
+.violation-rule{font-size:12px;font-weight:700;color:var(--text);margin-bottom:2px;}
+
+/* ═══ REASONS ═══ */
+.reasons-section{background:rgba(251,191,36,0.04);border:1px solid rgba(251,191,36,0.2);border-radius:12px;padding:20px;margin-top:16px;display:none;}
+.reasons-header{font-family:var(--font-mono);font-size:11px;color:var(--yellow);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:16px;}
+.reason-item{display:flex;gap:12px;padding:8px 0;align-items:flex-start;}
+.reason-num{font-family:var(--font-mono);font-size:10px;color:var(--yellow);width:24px;flex-shrink:0;margin-top:2px;}
+.reason-text{font-family:var(--font-mono);font-size:12px;color:var(--muted);line-height:1.7;}
+
+/* ═══ DATA SECTION ═══ */
+#data{background:var(--surface);}
+.data-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:24px;max-width:1200px;margin:60px auto 0;}
+.data-card{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:36px;overflow:hidden;position:relative;}
+.data-card::after{content:'';position:absolute;inset:0;border-radius:16px;background:linear-gradient(135deg,var(--cyan-dim),transparent);opacity:0;transition:opacity 0.4s;pointer-events:none;}
+.data-card:hover::after{opacity:1;}
+.data-card-title{font-size:16px;font-weight:700;margin-bottom:6px;}
+.data-card-sub{font-family:var(--font-mono);font-size:12px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:28px;}
+.bars{display:flex;flex-direction:column;gap:12px;}
+.bar-row{display:flex;align-items:center;gap:14px;}
+.bar-label{font-family:var(--font-mono);font-size:12px;color:var(--muted);width:80px;text-align:right;flex-shrink:0;}
+.bar-track{flex:1;height:8px;background:rgba(255,255,255,0.05);border-radius:100px;overflow:hidden;}
+.bar-fill{height:100%;border-radius:100px;background:linear-gradient(90deg,var(--cyan),var(--green));width:0;transition:width 1.5s cubic-bezier(0.16,1,0.3,1);}
+.bar-val{font-family:var(--font-mono);font-size:12px;color:var(--cyan);width:36px;}
+.radial-wrap{display:flex;justify-content:center;align-items:center;gap:40px;}
+.radial{position:relative;width:110px;height:110px;}
+.radial svg{transform:rotate(-90deg);}
+.radial-bg{fill:none;stroke:rgba(255,255,255,0.05);stroke-width:8;}
+.radial-fg{fill:none;stroke-width:8;stroke-linecap:round;stroke-dasharray:283;stroke-dashoffset:283;transition:stroke-dashoffset 1.8s cubic-bezier(0.16,1,0.3,1);}
+.radial-label{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.radial-pct{font-size:18px;font-weight:800;}
+.radial-name{font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-top:2px;}
+.sparkline-wrap{position:relative;height:80px;}
+.sparkline-wrap svg{width:100%;height:100%;}
+
+/* ═══ TIMELINE ═══ */
+#howit{background:var(--bg);}
+.timeline{max-width:800px;margin:60px auto 0;position:relative;}
+.timeline::before{content:'';position:absolute;left:31px;top:0;bottom:0;width:1px;background:linear-gradient(var(--border),var(--cyan),var(--border));}
+.tl-step{display:flex;gap:40px;margin-bottom:56px;position:relative;}
+.tl-node{width:64px;height:64px;border-radius:50%;flex-shrink:0;border:1px solid var(--border);background:var(--panel);display:flex;align-items:center;justify-content:center;font-size:22px;position:relative;z-index:1;transition:all 0.3s;}
+.tl-step:hover .tl-node{border-color:var(--cyan);box-shadow:0 0 24px var(--cyan-glow);}
+.tl-content{padding-top:14px;}
+.tl-num{font-family:var(--font-mono);font-size:11px;color:var(--cyan);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px;}
+.tl-title{font-size:22px;font-weight:700;margin-bottom:10px;}
+.tl-desc{font-family:var(--font-mono);font-size:14px;color:var(--muted);line-height:1.8;}
+
+/* ═══ RISK SCALE ═══ */
+#riskscale{background:var(--surface);}
+.risk-cards{display:flex;gap:2px;max-width:1200px;margin:60px auto 0;background:var(--border);border:1px solid var(--border);border-radius:16px;overflow:hidden;}
+.risk-card{flex:1;padding:36px 28px;background:var(--panel);text-align:center;transition:background 0.3s;position:relative;overflow:hidden;}
+.risk-card:hover{background:#0f1c2e;}
+.risk-card::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;}
+.risk-card.clear::after{background:var(--green);}
+.risk-card.low::after{background:var(--cyan);}
+.risk-card.mod::after{background:#fbbf24;}
+.risk-card.high::after{background:var(--orange);}
+.risk-card.crit::after{background:var(--red);}
+.risk-icon{font-size:32px;margin-bottom:16px;}
+.risk-range{font-family:var(--font-mono);font-size:22px;font-weight:700;margin-bottom:8px;}
+.risk-name{font-size:15px;font-weight:700;margin-bottom:10px;}
+.risk-desc{font-family:var(--font-mono);font-size:12px;color:var(--muted);line-height:1.7;}
+
+/* ═══ CTA & FOOTER ═══ */
+#cta{background:var(--bg);text-align:center;padding:160px 48px;position:relative;overflow:hidden;}
+.cta-glow{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:800px;height:400px;border-radius:50%;background:radial-gradient(ellipse,rgba(0,212,255,0.06),transparent 70%);pointer-events:none;}
+.cta-title{font-size:clamp(40px,6vw,80px);font-weight:800;letter-spacing:-0.04em;line-height:1;background:linear-gradient(135deg,var(--text),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:24px;}
+.cta-sub{font-family:var(--font-mono);color:var(--muted);font-size:16px;margin-bottom:48px;}
+footer{background:var(--surface);border-top:1px solid var(--border);padding:60px 48px 40px;}
+.footer-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:48px;max-width:1200px;margin:0 auto 60px;}
+.footer-brand p{font-family:var(--font-mono);font-size:14px;color:var(--muted);line-height:1.8;margin-top:16px;max-width:280px;}
+.footer-col h4{font-size:13px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text);margin-bottom:20px;}
+.footer-col a{display:block;font-family:var(--font-mono);font-size:13px;color:var(--muted);text-decoration:none;margin-bottom:10px;cursor:none;transition:color 0.2s;}
+.footer-col a:hover{color:var(--cyan);}
+.footer-bottom{border-top:1px solid var(--border);padding-top:32px;display:flex;justify-content:space-between;align-items:center;max-width:1200px;margin:0 auto;}
+.footer-bottom p{font-family:var(--font-mono);font-size:12px;color:var(--muted);}
+
+/* ═══ REVEAL ═══ */
+.reveal{opacity:0;transform:translateY(40px);transition:opacity 0.7s ease,transform 0.7s ease;}
+.reveal.visible{opacity:1;transform:translateY(0);}
+
+/* ═══ RESPONSIVE ═══ */
+@media(max-width:900px){
+  nav{padding:0 24px;}
+  .nav-links{display:none;}
+  .hero{padding:100px 24px 60px;}
+  .stats-bar{flex-wrap:wrap;}
+  .features-grid{grid-template-columns:1fr;}
+  .assess-layout{grid-template-columns:1fr;gap:40px;}
+  .data-grid{grid-template-columns:1fr;}
+  .risk-cards{flex-direction:column;}
+  .footer-grid{grid-template-columns:1fr 1fr;}
+  section{padding:80px 24px;}
+  .input-row{grid-template-columns:1fr;}
+  .auth-row{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+<div id="cursor"></div>
+<div id="cursor-ring"></div>
+<div id="grid-bg"></div>
+<div class="orb orb-1"></div>
+<div class="orb orb-2"></div>
+<div class="orb orb-3"></div>
+
+<!-- ════ AUTH OVERLAY ════ -->
+<div id="auth-overlay">
+  <div class="auth-box">
+    <div class="auth-header">
+      <div class="auth-logo">
+        <div class="logo-icon">✈</div>
+        <span>AeroMind</span>
+      </div>
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="tab-login" onclick="switchTab('login')">Sign In</button>
+        <button class="auth-tab" id="tab-register" onclick="switchTab('register')">Register</button>
+      </div>
+    </div>
+    <div class="auth-body">
+      <div class="auth-error" id="auth-error"></div>
+
+      <!-- LOGIN -->
+      <div id="form-login">
+        <div class="auth-field">
+          <label class="auth-label">Email Address</label>
+          <input class="auth-input" id="login-email" type="email" placeholder="captain@airline.com" autocomplete="email">
+        </div>
+        <div class="auth-field">
+          <label class="auth-label">Password</label>
+          <input class="auth-input" id="login-pass" type="password" placeholder="••••••••">
+        </div>
+        <button class="auth-submit" onclick="doLogin()">Access System →</button>
+        <div class="auth-disclaimer">⚠ This system stores your profile locally. Never share your credentials.</div>
+      </div>
+
+      <!-- REGISTER -->
+      <div id="form-register" style="display:none;">
+        <div class="auth-row">
+          <div class="auth-field">
+            <label class="auth-label">First Name</label>
+            <input class="auth-input" id="reg-fname" type="text" placeholder="James">
+          </div>
+          <div class="auth-field">
+            <label class="auth-label">Last Name</label>
+            <input class="auth-input" id="reg-lname" type="text" placeholder="Reid">
+          </div>
+        </div>
+        <div class="auth-field">
+          <label class="auth-label">Email Address *</label>
+          <input class="auth-input" id="reg-email" type="email" placeholder="captain@airline.com" autocomplete="email">
+        </div>
+        <div class="auth-field">
+          <label class="auth-label">Airline / Organisation</label>
+          <input class="auth-input" id="reg-org" type="text" placeholder="Global Air International">
+        </div>
+        <div class="auth-row">
+          <div class="auth-field">
+            <label class="auth-label">Pilot Licence No.</label>
+            <input class="auth-input" id="reg-licence" type="text" placeholder="ATPL-2201">
+          </div>
+          <div class="auth-field">
+            <label class="auth-label">Password</label>
+            <input class="auth-input" id="reg-pass" type="password" placeholder="Min 6 characters">
+          </div>
+        </div>
+        <button class="auth-submit" onclick="doRegister()">Create Account →</button>
+        <div class="auth-disclaimer">⚠ Email is required and used as your unique identifier. All data is stored locally.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page">
+<!-- ════ NAVBAR ════ -->
+<nav>
+  <div class="nav-logo">
+    <div class="logo-icon">✈</div>
+    AeroMind
+  </div>
+  <div class="nav-links">
+    <a href="#domains">Domains</a>
+    <a href="#assessment">Assessment</a>
+    <a href="#data">Analytics</a>
+    <a href="#howit">How It Works</a>
+    <a href="#riskscale">Risk Scale</a>
+  </div>
+  <div class="nav-user-info">
+    <span class="nav-user-badge" id="nav-user-badge">Not signed in</span>
+    <button class="nav-btn" id="nav-action-btn" onclick="document.getElementById('assessment').scrollIntoView({behavior:'smooth'})">Start Assessment →</button>
+  </div>
+</nav>
+
+<!-- ════ HERO ════ -->
+<section class="hero">
+  <div class="hero-badge">
+    <span class="badge-dot"></span>
+    Aviation Safety System — Flight Risk Protocol Active
+  </div>
+  <h1>
+    <span class="line-1">Pilot Mood &amp;</span>
+    <span class="line-2">Flight Risk Assessment</span>
+  </h1>
+  <p class="hero-sub">
+    A next-generation psychological readiness tool for aviation safety.<br>
+    Measure cognitive, emotional, and physical fitness before every flight.
+  </p>
+  <div class="hero-actions">
+    <button class="btn-primary" onclick="document.getElementById('assessment').scrollIntoView({behavior:'smooth'})">Begin Assessment ✈</button>
+    <button class="btn-secondary" onclick="document.getElementById('howit').scrollIntoView({behavior:'smooth'})">How It Works</button>
+  </div>
+  <div class="scroll-hint">
+    <div class="scroll-line"></div>
+    Scroll to explore
+  </div>
+</section>
+
+<!-- ════ STATS BAR ════ -->
+<div class="stats-bar">
+  <div class="stat-item reveal"><div class="stat-number" data-target="20">0</div><div class="stat-label">Question Bank Size</div></div>
+  <div class="stat-item reveal"><div class="stat-number" data-target="10">0</div><div class="stat-label">Questions Per Session</div></div>
+  <div class="stat-item reveal"><div class="stat-number" data-target="5">0</div><div class="stat-label">Assessment Domains</div></div>
+  <div class="stat-item reveal"><div class="stat-number" data-target="5">0</div><div class="stat-label">Risk Classifications</div></div>
+</div>
+
+<!-- ════ DOMAINS ════ -->
+<section id="domains">
+  <div class="features-header reveal">
+    <div class="section-tag">// Assessment Domains</div>
+    <h2 class="section-title">Five dimensions of <span>pilot readiness</span></h2>
+    <p class="section-sub">Each domain draws from a bank of 4 questions — 2 are randomly selected per session. This creates a unique, unpredictable questionnaire every time.</p>
+  </div>
+  <div class="features-grid reveal">
+    <div class="feature-card">
+      <div class="feature-icon c">🧠</div>
+      <div class="feature-title">Cognitive Readiness</div>
+      <div class="feature-desc">Measures mental sharpness, concentration, decision-making speed, and procedural recall. Critical for split-second in-flight judgments.</div>
+      <span class="feature-tag tag-c">30% FRI Weight</span>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon p">💜</div>
+      <div class="feature-title">Emotional Stability</div>
+      <div class="feature-desc">Evaluates stress management, emotional balance, separation of personal concerns from duty, and overall psychological composure.</div>
+      <span class="feature-tag tag-p">20% FRI Weight</span>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon g">💪</div>
+      <div class="feature-title">Physical Condition</div>
+      <div class="feature-desc">Assesses rest quality, physical energy, freedom from pain or illness, hydration/nutrition status, and substance clearance before duty.</div>
+      <span class="feature-tag tag-g">25% FRI Weight</span>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon o">🎯</div>
+      <div class="feature-title">Situational Awareness</div>
+      <div class="feature-desc">Gauges environmental awareness, risk assessment confidence, NOTAM/weather currency, and preparedness for unexpected scenarios.</div>
+      <span class="feature-tag tag-o">15% FRI Weight</span>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon c">👥</div>
+      <div class="feature-title">Social / CRM</div>
+      <div class="feature-desc">Measures crew communication comfort, crew alignment, CRM effectiveness, and confidence in mutual support during operations.</div>
+      <span class="feature-tag tag-c">10% FRI Weight</span>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon g">🍺</div>
+      <div class="feature-title">Substance & Medication</div>
+      <div class="feature-desc">Mandatory screening for alcohol consumption and medication usage. Direct regulatory violations are flagged per ICAO Annex 1 and FAA 91.17.</div>
+      <span class="feature-tag tag-r">Auto Disqualifier</span>
+    </div>
+  </div>
+</section>
+
+<!-- ════ ASSESSMENT SECTION ════ -->
+<section id="assessment">
+  <div class="assess-layout">
+    <div class="reveal">
+      <div class="section-tag">// Live Assessment Tool</div>
+      <h2 class="section-title">Take the <span>assessment</span> now</h2>
+      <p class="section-sub">Answer 10 questions drawn randomly from a bank of 20 across 5 domains. Every session is unique — no two pilots receive the same questionnaire.</p>
+      <div style="margin-top:32px;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;">
+        <div style="font-family:var(--font-mono);font-size:11px;color:var(--cyan);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:14px;">// Session Randomisation</div>
+        <div style="font-family:var(--font-mono);font-size:13px;color:var(--muted);line-height:1.9;">
+          • 2 questions randomly selected per domain<br>
+          • 1 mandatory substance & medication screen<br>
+          • Question order shuffled on every load<br>
+          • Bank rotates on every page refresh<br>
+          • Unique FRI generated per session
+        </div>
+      </div>
+      <div style="margin-top:20px;background:rgba(255,68,102,0.06);border:1px solid rgba(255,68,102,0.2);border-radius:14px;padding:20px;">
+        <div style="font-family:var(--font-mono);font-size:11px;color:var(--red);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:10px;">// Regulatory Compliance</div>
+        <div style="font-family:var(--font-mono);font-size:13px;color:var(--muted);line-height:1.9;">
+          Low scores trigger automatic review against ICAO Annex 1 and FAA regulations. Historical incident correlations are surfaced where domain risks align with documented crashes.
+        </div>
+      </div>
+    </div>
+
+    <div class="assess-panel reveal">
+      <div class="assess-header">
+        <div class="assess-avatar">✈</div>
+        <div>
+          <div class="assess-title-text">Pilot Readiness Check</div>
+          <div class="assess-subtitle" style="display:flex;align-items:center;gap:6px;"><span style="width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;animation:pulse 2s infinite;"></span>System Active</div>
+        </div>
+      </div>
+
+      <!-- STEP 1: Profile -->
+      <div class="assess-body" id="step-profile">
+        <div class="section-tag" style="margin-bottom:16px;">// Pilot Profile</div>
+        <div class="input-group">
+          <label class="input-label">Full Name</label>
+          <input class="assess-input" id="inp-name" type="text" placeholder="e.g. Capt. James Reid">
+        </div>
+        <div class="input-row">
+          <div class="input-group">
+            <label class="input-label">Rank / Position</label>
+            <input class="assess-input" id="inp-rank" type="text" placeholder="Captain">
+          </div>
+          <div class="input-group">
+            <label class="input-label">Flight ID</label>
+            <input class="assess-input" id="inp-flight" type="text" placeholder="FL-2201">
+          </div>
+        </div>
+        <div class="input-row">
+          <div class="input-group">
+            <label class="input-label">Hours Slept</label>
+            <input class="assess-input" id="inp-sleep" type="number" min="0" max="24" placeholder="7">
+          </div>
+          <div class="input-group">
+            <label class="input-label">Hours On Duty</label>
+            <input class="assess-input" id="inp-duty" type="number" min="0" max="24" placeholder="3">
+          </div>
+        </div>
+        <button class="btn-primary" style="width:100%;margin-top:8px;" onclick="startAssessment()">Begin Assessment →</button>
+      </div>
+
+      <!-- STEP 2: Questions -->
+      <div class="assess-body" id="step-questions" style="display:none;">
+        <div class="progress-wrap">
+          <div class="progress-label">
+            <span id="q-progress-text">Question 1 of 10</span>
+            <span id="q-domain-text" style="color:var(--cyan)">Domain</span>
+          </div>
+          <div class="progress-track"><div class="progress-fill" id="q-progress-fill"></div></div>
+        </div>
+        <div id="questions-container"></div>
+        <div class="alcohol-warning" id="alcohol-warning">
+          ⚠ Regulatory Alert: FAA 14 CFR §91.17 prohibits flight crew from acting as pilot within 8 hours of alcohol consumption or while under its influence. ICAO Annex 2 §2.5 applies the same standard internationally. Answering below "3" here may result in automatic grounding.
+        </div>
+        <div class="q-nav">
+          <button class="q-nav-btn q-prev" id="btn-prev" onclick="prevQuestion()">← Prev</button>
+          <button class="q-nav-btn q-next" id="btn-next" onclick="nextQuestion()" disabled>Next →</button>
+        </div>
+      </div>
+
+      <!-- STEP 3: Results -->
+      <div class="assess-body" id="step-result" style="display:none;padding:0;">
+        <div class="result-panel">
+          <div class="fri-display">
+            <div class="fri-score-big" id="res-fri-score">--</div>
+            <div class="fri-label">Flight Risk Index / 100</div>
+            <div class="fri-status" id="res-fri-status">Calculating...</div>
+          </div>
+          <div class="domain-results" id="res-domains"></div>
+          <div style="display:flex;gap:16px;margin-top:8px;font-family:var(--font-mono);font-size:12px;">
+            <div style="flex:1;background:var(--surface);border-radius:10px;padding:14px;text-align:center;">
+              <div style="color:var(--muted);margin-bottom:4px;">FATIGUE</div>
+              <div style="color:var(--orange);font-size:18px;font-weight:800;" id="res-fatigue">--</div>
+            </div>
+            <div style="flex:1;background:var(--surface);border-radius:10px;padding:14px;text-align:center;">
+              <div style="color:var(--muted);margin-bottom:4px;">MOOD</div>
+              <div style="color:var(--cyan);font-size:18px;font-weight:800;" id="res-mood">--</div>
+            </div>
+            <div style="flex:1;background:var(--surface);border-radius:10px;padding:14px;text-align:center;">
+              <div style="color:var(--muted);margin-bottom:4px;">AVG SCORE</div>
+              <div style="color:var(--green);font-size:18px;font-weight:800;" id="res-avg">--</div>
+            </div>
+          </div>
+          <div class="recommendation-box" id="res-rec" style="margin-top:20px;">
+            <div class="rec-title">// AI Recommendation</div>
+            <div class="rec-text" id="res-rec-text">Processing...</div>
+          </div>
+
+          <!-- UNFIT REASONS -->
+          <div class="reasons-section" id="res-reasons">
+            <div class="reasons-header">⚠ Identified Risk Factors</div>
+            <div id="res-reasons-list"></div>
+          </div>
+
+          <!-- CRASH HISTORICAL DATA -->
+          <div class="crash-section" id="res-crashes">
+            <div class="crash-header">
+              <span class="crash-header-icon">📁</span>
+              <span class="crash-header-title">// Historical Incident Correlations</span>
+            </div>
+            <div id="res-crashes-list"></div>
+          </div>
+
+          <!-- ICAO/FAA VIOLATIONS -->
+          <div class="violations-section" id="res-violations">
+            <div class="violations-header">🚫 Regulatory Violations Detected</div>
+            <div id="res-violations-list"></div>
+          </div>
+
+          <button class="go-nogo" id="res-gonogo">Calculating...</button>
+          <button class="reset-btn" onclick="resetAssessment()">↺ New Assessment</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════ DATA ════ -->
+<section id="data">
+  <div style="max-width:1200px;margin:0 auto;">
+    <div class="reveal">
+      <div class="section-tag">// Fleet Analytics</div>
+      <h2 class="section-title">Operational data at a <span>glance</span></h2>
+    </div>
+    <div class="data-grid">
+      <div class="data-card reveal">
+        <div class="data-card-title">Domain Benchmark Averages</div>
+        <div class="data-card-sub">Typical pilot population scores</div>
+        <div class="bars">
+          <div class="bar-row"><span class="bar-label">Cognitive</span><div class="bar-track"><div class="bar-fill" data-w="78"></div></div><span class="bar-val">78%</span></div>
+          <div class="bar-row"><span class="bar-label">Emotional</span><div class="bar-track"><div class="bar-fill" data-w="72"></div></div><span class="bar-val">72%</span></div>
+          <div class="bar-row"><span class="bar-label">Physical</span><div class="bar-track"><div class="bar-fill" data-w="81"></div></div><span class="bar-val">81%</span></div>
+          <div class="bar-row"><span class="bar-label">Situational</span><div class="bar-track"><div class="bar-fill" data-w="85"></div></div><span class="bar-val">85%</span></div>
+          <div class="bar-row"><span class="bar-label">Social/CRM</span><div class="bar-track"><div class="bar-fill" data-w="76"></div></div><span class="bar-val">76%</span></div>
+        </div>
+      </div>
+      <div class="data-card reveal">
+        <div class="data-card-title">Risk Distribution</div>
+        <div class="data-card-sub">Pilot fleet classification breakdown</div>
+        <div class="radial-wrap" style="margin-top:16px;">
+          <div class="radial">
+            <svg viewBox="0 0 100 100" width="110" height="110"><circle class="radial-bg" cx="50" cy="50" r="45"/><circle class="radial-fg" cx="50" cy="50" r="45" stroke="#00ff88" data-pct="64"/></svg>
+            <div class="radial-label"><span class="radial-pct" style="color:var(--green)">64%</span><span class="radial-name">Clear</span></div>
+          </div>
+          <div class="radial">
+            <svg viewBox="0 0 100 100" width="110" height="110"><circle class="radial-bg" cx="50" cy="50" r="45"/><circle class="radial-fg" cx="50" cy="50" r="45" stroke="#00d4ff" data-pct="24"/></svg>
+            <div class="radial-label"><span class="radial-pct" style="color:var(--cyan)">24%</span><span class="radial-name">Low Risk</span></div>
+          </div>
+          <div class="radial">
+            <svg viewBox="0 0 100 100" width="110" height="110"><circle class="radial-bg" cx="50" cy="50" r="45"/><circle class="radial-fg" cx="50" cy="50" r="45" stroke="#ff4466" data-pct="12"/></svg>
+            <div class="radial-label"><span class="radial-pct" style="color:var(--red)">12%</span><span class="radial-name">Restricted</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="data-card reveal" style="grid-column:1/-1;">
+        <div class="data-card-title">Live Assessment Activity</div>
+        <div class="data-card-sub">Simulated system throughput — assessments per hour</div>
+        <div class="sparkline-wrap" style="margin-top:16px;">
+          <svg id="sparkline-svg" viewBox="0 0 800 80" preserveAspectRatio="none">
+            <defs><linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#00d4ff" stop-opacity="0.3"/><stop offset="100%" stop-color="#00d4ff" stop-opacity="0"/></linearGradient></defs>
+            <path id="spark-area" fill="url(#sparkGrad)"/><path id="spark-line" fill="none" stroke="#00d4ff" stroke-width="2"/>
+          </svg>
+        </div>
+        <div style="display:flex;gap:32px;margin-top:16px;">
+          <div><span style="font-family:var(--font-mono);font-size:11px;color:var(--muted);">CURRENT</span><div style="font-size:22px;font-weight:800;color:var(--cyan)" id="rps-current">--</div></div>
+          <div><span style="font-family:var(--font-mono);font-size:11px;color:var(--muted);">PEAK</span><div style="font-size:22px;font-weight:800;color:var(--green)" id="rps-peak">--</div></div>
+          <div><span style="font-family:var(--font-mono);font-size:11px;color:var(--muted);">AVERAGE</span><div style="font-size:22px;font-weight:800;color:var(--purple)" id="rps-avg">--</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════ HOW IT WORKS ════ -->
+<section id="howit">
+  <div style="max-width:1200px;margin:0 auto;">
+    <div class="reveal">
+      <div class="section-tag">// Assessment Protocol</div>
+      <h2 class="section-title">How the <span>FRI</span> is calculated</h2>
+      <p class="section-sub">Six stages — from secure login to GO/NO-GO decision — completed in under 5 minutes.</p>
+    </div>
+    <div class="timeline">
+      <div class="tl-step reveal"><div class="tl-node">🔐</div><div class="tl-content"><div class="tl-num">Step 01</div><div class="tl-title">Secure Authentication</div><div class="tl-desc">Pilots register with a verified email address and organisation details. Credentials are stored locally and used to personalise each session.</div></div></div>
+      <div class="tl-step reveal"><div class="tl-node">📋</div><div class="tl-content"><div class="tl-num">Step 02</div><div class="tl-title">Pilot Profile Collection</div><div class="tl-desc">Name, rank, flight ID, hours slept, and hours on duty are recorded. Sleep and duty data directly influence the Fatigue Index penalty.</div></div></div>
+      <div class="tl-step reveal"><div class="tl-node">🎲</div><div class="tl-content"><div class="tl-num">Step 03</div><div class="tl-title">Random 10-Question Draw</div><div class="tl-desc">2 questions per domain are selected randomly from a pool of 4 each — plus a mandatory substance screen. No two sessions are identical.</div></div></div>
+      <div class="tl-step reveal"><div class="tl-node">⚙️</div><div class="tl-content"><div class="tl-num">Step 04</div><div class="tl-title">Weighted Scoring Engine</div><div class="tl-desc">Domain averages combine using evidence-based weights: Cognitive 30%, Physical 25%, Emotional 20%, Situational 15%, Social 10%.</div></div></div>
+      <div class="tl-step reveal"><div class="tl-node">⚡</div><div class="tl-content"><div class="tl-num">Step 05</div><div class="tl-title">Fatigue & Substance Penalty</div><div class="tl-desc">Sleep deficit, excessive duty hours, alcohol use, and impairing medication trigger automatic FRI penalties. Some conditions result in immediate grounding.</div></div></div>
+      <div class="tl-step reveal"><div class="tl-node">✅</div><div class="tl-content"><div class="tl-num">Step 06</div><div class="tl-title">GO / NO-GO + Regulatory Report</div><div class="tl-desc">The FRI maps to one of five statuses. For scores below threshold: historical crash correlations, ICAO/FAA violations, and randomised root-cause reasons are generated.</div></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ════ RISK SCALE ════ -->
+<section id="riskscale">
+  <div style="max-width:1200px;margin:0 auto;">
+    <div class="reveal" style="text-align:center;">
+      <div class="section-tag">// Flight Risk Index Scale</div>
+      <h2 class="section-title" style="max-width:100%;">Five levels of <span>operational status</span></h2>
+    </div>
+    <div class="risk-cards reveal">
+      <div class="risk-card clear"><div class="risk-icon">✅</div><div class="risk-range" style="color:var(--green)">85–100</div><div class="risk-name">Clear for Flight</div><div class="risk-desc">Fully fit. All domains above threshold. Proceed with normal pre-flight protocol.</div></div>
+      <div class="risk-card low"><div class="risk-icon">🔵</div><div class="risk-range" style="color:var(--cyan)">70–84</div><div class="risk-name">Low Risk</div><div class="risk-desc">Minor sub-threshold scores. Cleared but targeted domain review recommended.</div></div>
+      <div class="risk-card mod"><div class="risk-icon">🟡</div><div class="risk-range" style="color:#fbbf24">55–69</div><div class="risk-name">Moderate Risk</div><div class="risk-desc">Conditional GO. Supervisor review required before operations commence.</div></div>
+      <div class="risk-card high"><div class="risk-icon">🟠</div><div class="risk-range" style="color:var(--orange)">35–54</div><div class="risk-name">High Risk</div><div class="risk-desc">Significant concerns. Pilot should not fly until re-assessment passes.</div></div>
+      <div class="risk-card crit"><div class="risk-icon">🔴</div><div class="risk-range" style="color:var(--red)">&lt; 35</div><div class="risk-name">Grounded</div><div class="risk-desc">Critical status. Immediate removal from duty. Refer to aviation medical officer.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ════ CTA ════ -->
+<section id="cta">
+  <div class="cta-glow"></div>
+  <div class="reveal">
+    <h2 class="cta-title">Ready to assess<br>your readiness?</h2>
+    <p class="cta-sub">Take the 10-question randomised assessment and receive your Flight Risk Index in under 5 minutes.</p>
+    <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;">
+      <button class="btn-primary" style="font-size:16px;padding:20px 52px;" onclick="document.getElementById('assessment').scrollIntoView({behavior:'smooth'})">Start Assessment ✈</button>
+      <button class="btn-secondary" style="font-size:16px;padding:20px 52px;" onclick="document.getElementById('domains').scrollIntoView({behavior:'smooth'})">View Domains</button>
+    </div>
+  </div>
+</section>
+
+<!-- ════ FOOTER ════ -->
+<footer>
+  <div class="footer-grid">
+    <div class="footer-brand">
+      <div class="nav-logo" style="font-size:18px;margin-bottom:12px;"><div class="logo-icon">✈</div> AeroMind</div>
+      <p>Advanced pilot psychological readiness assessment. Supporting aviation safety research and operational excellence worldwide.</p>
+    </div>
+    <div class="footer-col"><h4>Assessment</h4><a href="#">Start Assessment</a><a href="#">Risk Scale</a><a href="#">Domain Guide</a><a href="#">FAQ</a></div>
+    <div class="footer-col"><h4>Research</h4><a href="#">Methodology</a><a href="#">FRI Algorithm</a><a href="#">Safety Protocols</a><a href="#">Publications</a></div>
+    <div class="footer-col"><h4>Project</h4><a href="#">About</a><a href="#">School Project</a><a href="#">References</a><a href="#">Contact</a></div>
+  </div>
+  <div class="footer-bottom">
+    <p>© 2025 AeroMind — Pilot Mood Assessment · School Project</p>
+    <p style="color:var(--cyan)">Built with HTML · CSS · JavaScript</p>
+  </div>
+</footer>
+</div>
+
+<script>
+/* ══════════════════════════════════════════
+   CURSOR
+══════════════════════════════════════════ */
+const cursor=document.getElementById('cursor'),ring=document.getElementById('cursor-ring');
+document.addEventListener('mousemove',e=>{cursor.style.left=e.clientX+'px';cursor.style.top=e.clientY+'px';setTimeout(()=>{ring.style.left=e.clientX+'px';ring.style.top=e.clientY+'px';},80);});
+
+/* ══════════════════════════════════════════
+   SCROLL REVEAL
+══════════════════════════════════════════ */
+const io=new IntersectionObserver(entries=>{entries.forEach((e,i)=>{if(e.isIntersecting)setTimeout(()=>e.target.classList.add('visible'),i*80);});},{threshold:0.12});
+document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+
+/* ══════════════════════════════════════════
+   COUNTER
+══════════════════════════════════════════ */
+const cio=new IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersecting){document.querySelectorAll('[data-target]').forEach(el=>{const t=parseFloat(el.dataset.target);let c=0;const s=t/60;const iv=setInterval(()=>{c=Math.min(c+s,t);el.textContent=Math.floor(c);if(c>=t)clearInterval(iv);},20);});cio.disconnect();}});},{threshold:0.5});
+const sb=document.querySelector('.stats-bar');if(sb)cio.observe(sb);
+
+/* ══════════════════════════════════════════
+   BAR + RADIAL ANIMATIONS
+══════════════════════════════════════════ */
+const barIO=new IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersecting){e.target.querySelectorAll('.bar-fill').forEach((b,i)=>{setTimeout(()=>{b.style.width=b.dataset.w+'%';},i*120);});e.target.querySelectorAll('.radial-fg').forEach(r=>{r.style.strokeDashoffset=283*(1-parseFloat(r.dataset.pct)/100);});barIO.unobserve(e.target);}});},{threshold:0.3});
+document.querySelectorAll('.data-card').forEach(c=>barIO.observe(c));
+
+/* ══════════════════════════════════════════
+   SPARKLINE
+══════════════════════════════════════════ */
+const sparkData=Array.from({length:60},()=>Math.floor(Math.random()*40+20));
+function updateSparkline(){sparkData.shift();sparkData.push(Math.floor(Math.random()*40+20));const W=800,H=80;const min=Math.min(...sparkData),max=Math.max(...sparkData);const pts=sparkData.map((v,i)=>({x:i*(W/(sparkData.length-1)),y:H-((v-min)/(max-min))*(H-10)-5}));document.getElementById('spark-line').setAttribute('points',pts.map(p=>`${p.x},${p.y}`).join(' '));document.getElementById('spark-area').setAttribute('d',`M${pts[0].x},${H} `+pts.map(p=>`L${p.x},${p.y}`).join(' ')+` L${pts[pts.length-1].x},${H} Z`);const cur=sparkData[sparkData.length-1],peak=Math.max(...sparkData),avg=Math.round(sparkData.reduce((a,b)=>a+b,0)/sparkData.length);document.getElementById('rps-current').textContent=cur+'/hr';document.getElementById('rps-peak').textContent=peak+'/hr';document.getElementById('rps-avg').textContent=avg+'/hr';}
+setInterval(updateSparkline,1200);updateSparkline();
+
+/* ══════════════════════════════════════════
+   NAVBAR SCROLL
+══════════════════════════════════════════ */
+window.addEventListener('scroll',()=>{document.querySelector('nav').style.background=window.scrollY>40?'rgba(2,4,8,0.95)':'rgba(2,4,8,0.7)';});
+
+/* ══════════════════════════════════════════
+   AUTH SYSTEM
+══════════════════════════════════════════ */
+let currentUser=null;
+const USERS_KEY='aeromind_users';
+
+function getUsers(){try{return JSON.parse(localStorage.getItem(USERS_KEY))||{};}catch{return {};}}
+function saveUsers(u){localStorage.setItem(USERS_KEY,JSON.stringify(u));}
+
+function switchTab(tab){
+  document.getElementById('form-login').style.display=tab==='login'?'block':'none';
+  document.getElementById('form-register').style.display=tab==='register'?'block':'none';
+  document.getElementById('tab-login').className='auth-tab'+(tab==='login'?' active':'');
+  document.getElementById('tab-register').className='auth-tab'+(tab==='register'?' active':'');
+  document.getElementById('auth-error').style.display='none';
+}
+
+function showAuthError(msg){const el=document.getElementById('auth-error');el.textContent=msg;el.style.display='block';}
+
+function doRegister(){
+  const fname=document.getElementById('reg-fname').value.trim();
+  const lname=document.getElementById('reg-lname').value.trim();
+  const email=document.getElementById('reg-email').value.trim().toLowerCase();
+  const org=document.getElementById('reg-org').value.trim();
+  const licence=document.getElementById('reg-licence').value.trim();
+  const pass=document.getElementById('reg-pass').value;
+  if(!email||!email.includes('@')){showAuthError('A valid email address is required.');return;}
+  if(!pass||pass.length<6){showAuthError('Password must be at least 6 characters.');return;}
+  const users=getUsers();
+  if(users[email]){showAuthError('An account with this email already exists. Please sign in.');return;}
+  users[email]={fname,lname,email,org,licence,pass,created:new Date().toISOString()};
+  saveUsers(users);
+  loginUser(users[email]);
+}
+
+function doLogin(){
+  const email=document.getElementById('login-email').value.trim().toLowerCase();
+  const pass=document.getElementById('login-pass').value;
+  if(!email){showAuthError('Please enter your email address.');return;}
+  const users=getUsers();
+  if(!users[email]){showAuthError('No account found with this email. Please register first.');return;}
+  if(users[email].pass!==pass){showAuthError('Incorrect password. Please try again.');return;}
+  loginUser(users[email]);
+}
+
+function loginUser(user){
+  currentUser=user;
+  document.getElementById('auth-overlay').style.display='none';
+  const name=user.fname?`${user.fname} ${user.lname}`.trim():user.email;
+  document.getElementById('nav-user-badge').textContent='✈ '+name;
+  if(user.fname) document.getElementById('inp-name').value=`${user.fname} ${user.lname}`.trim();
+}
+
+/* ══════════════════════════════════════════
+   QUESTION BANK — 20 QUESTIONS (4 per domain + substance)
+══════════════════════════════════════════ */
+const QUESTION_BANK = {
+  Cognitive: [
+    {text:'How sharp and focused does your thinking feel right now?'},
+    {text:'How well can you concentrate without being easily distracted today?'},
+    {text:'How effectively can you make quick, accurate decisions right now?'},
+    {text:'How clearly can you recall emergency procedures and checklists today?'},
+  ],
+  Emotional: [
+    {text:'How emotionally balanced and calm do you feel at this moment?'},
+    {text:'How well are you managing any anxiety or pressure you currently feel?'},
+    {text:'How well can you separate personal concerns from your flight duties?'},
+    {text:'How positive and optimistic is your overall mindset heading into this flight?'},
+  ],
+  Physical: [
+    {text:'How rested and physically recovered do you feel after your last sleep period?'},
+    {text:'How would you rate your current physical energy and stamina level?'},
+    {text:'How free are you from physical discomfort, pain, or illness right now?'},
+    {text:'How adequate was your nutrition and hydration before reporting for duty?'},
+  ],
+  Situational: [
+    {text:'How aware and informed are you of your current operational environment?'},
+    {text:'How confident are you in your ability to assess and mitigate in-flight risks today?'},
+    {text:'How prepared do you feel for unexpected emergency scenarios during this flight?'},
+    {text:'How current and complete is your knowledge of today\'s NOTAMs, weather, and TFRs?'},
+  ],
+  'Social/CRM': [
+    {text:'How comfortable and effective are you communicating with your crew today?'},
+    {text:'How aligned do you feel with your crew\'s shared goals and situational mindset?'},
+    {text:'How confident are you that your crew will support your decisions effectively today?'},
+    {text:'How effective do you believe your Crew Resource Management will be on this flight?'},
+  ],
+};
+
+const SUBSTANCE_QUESTION = {
+  domain: 'Substance Screen',
+  text: 'Have you consumed any alcohol in the past 8 hours, or are you taking any prescription/OTC medication that may impair alertness, reaction time, or judgement? (5 = None / Fully Clear, 1 = Yes, substances used)',
+  isSubstance: true,
+};
+
+/* ══════════════════════════════════════════
+   HISTORICAL CRASH DATABASE
+══════════════════════════════════════════ */
+const CRASH_DB = {
+  Cognitive: [
+    {flight:'American Airlines 965 (1995)',desc:'Crew confusion over waypoint programming led to controlled flight into terrain in Colombia. Procedural recall failure under cognitive stress was a contributing factor.',match:'Cognitive impairment / procedural recall deficit'},
+    {flight:'Air France 447 (2009)',desc:'Pilots failed to correctly diagnose a stall situation at high altitude. Cognitive overload and poor decision-making under pressure contributed to the fatal crash.',match:'Poor decision-making / cognitive overload'},
+    {flight:'Helios Airways 522 (2005)',desc:'Crew failed to notice the pressurisation selector was in the wrong position. Checklist recall and systematic cognitive checks were absent.',match:'Checklist recall failure / reduced cognitive vigilance'},
+    {flight:'Asiana Airlines 214 (2013)',desc:'Crew over-relied on automation and failed to monitor airspeed adequately during visual approach, resulting in a runway hard landing. Situational cognitive monitoring failure.',match:'Cognitive complacency / automation over-reliance'},
+  ],
+  Emotional: [
+    {flight:'Germanwings 9525 (2015)',desc:'Co-pilot in a severe depressive episode deliberately crashed the aircraft into the Alps. Concealment of mental illness and emotional instability led to catastrophic outcome.',match:'Emotional instability / psychological crisis'},
+    {flight:'SilkAir 185 (1997)',desc:'Investigators suspected deliberate act by the captain under significant personal and financial stress. Emotional distress was identified as a likely contributing factor.',match:'Emotional distress / psychological pressure'},
+    {flight:'EgyptAir 990 (1999)',desc:'NTSB concluded the co-pilot intentionally caused the crash, with investigators citing significant personal grievances and emotional state as relevant factors.',match:'Emotional dysregulation / personal stress'},
+    {flight:'Pacific Southwest Airlines 1771 (1987)',desc:'A recently terminated employee shot the crew mid-flight. The event prompted global policy review of emotional and psychological screening of aviation staff.',match:'Acute emotional crisis / stress-related impairment'},
+  ],
+  Physical: [
+    {flight:'Colgan Air 3407 (2009)',desc:'Both pilots showed signs of fatigue. The captain had a history of failing check rides and had flown all night before the fatal Buffalo crash. Physical rest was inadequate.',match:'Physical fatigue / inadequate rest before duty'},
+    {flight:'Korean Air 6316 (1999)',desc:'Crew fatigue and physical exhaustion contributed to a controlled flight into terrain in China, with the crew failing to follow ATC instructions.',match:'Physical exhaustion / fatigue-related error'},
+    {flight:'China Airlines 006 (1985)',desc:'After an engine flameout, the fatigued crew allowed the aircraft to roll and dive 30,000 feet before recovering. Physical fatigue reduced crew response effectiveness.',match:'Fatigue-induced delayed response'},
+    {flight:'FedEx Express 647 (2003)',desc:'The captain was found to have sleep apnoea, significantly impairing sleep quality and physical readiness. Physical health conditions impaired performance.',match:'Physical health impairment / sleep disorder'},
+  ],
+  Situational: [
+    {flight:'Tenerife Airport Disaster (1977)',desc:'KLM captain initiated takeoff without proper ATC clearance in fog. Situational awareness of runway occupancy was critically absent, causing the deadliest aviation accident in history.',match:'Situational awareness failure / environment misjudgement'},
+    {flight:'USAir 405 (1992)',desc:'Crew failed to adequately assess ice accumulation on wings before takeoff. Environmental situational awareness failure in icing conditions led to crash.',match:'Environmental awareness deficit / weather misjudgement'},
+    {flight:'Air Midwest 5481 (2003)',desc:'Crew was unaware of incorrect maintenance that caused control surface restriction. Lack of system situational awareness compounded the fatal outcome.',match:'Technical situational awareness gap'},
+    {flight:'Pinnacle Airlines 3701 (2004)',desc:'Crew climbed beyond the aircraft\'s certified ceiling and lost both engines. Failure to assess operational limits reflects poor situational risk judgement.',match:'Risk assessment failure / operational overreach'},
+  ],
+  'Social/CRM': [
+    {flight:'United Airlines 173 (1978)',desc:'Captain focused on a landing gear problem while fuel was critically depleted. Crew failed to assertively communicate the fuel state — a classic CRM breakdown.',match:'CRM failure / crew communication breakdown'},
+    {flight:'Korean Air 007 (1983)',desc:'Co-pilots failed to challenge the captain on navigation errors. Authoritarian cockpit culture prevented crew from correcting the course deviation.',match:'Crew authority gradient / CRM deficit'},
+    {flight:'Air Ontario 1363 (1989)',desc:'Flight attendants and co-pilot noticed ice on wings but did not challenge the captain\'s decision to depart. CRM failure in assertiveness led to fatal crash.',match:'Crew assertiveness failure / communication gap'},
+    {flight:'Avianca 052 (1990)',desc:'Crew failed to declare a fuel emergency clearly to ATC. Poor communication under stress and cultural deference resulted in fuel exhaustion and crash.',match:'Communication failure / stress-related CRM breakdown'},
+  ],
+};
+
+/* ══════════════════════════════════════════
+   UNFITNESS REASON POOLS
+══════════════════════════════════════════ */
+const REASON_POOLS = {
+  Cognitive: [
+    'Pilot demonstrated a below-threshold score in cognitive sharpness, indicating reduced capacity for accurate, timely decision-making during complex flight phases.',
+    'Cognitive domain score suggests compromised ability to recall emergency checklists and procedures under pressure — a critical in-flight safety requirement.',
+    'Reduced concentration levels detected may impair the pilot\'s capacity to monitor multiple flight instruments simultaneously, increasing error probability.',
+    'Below-standard decision-making speed as indicated by cognitive assessment creates risk of delayed response during critical flight events such as TCAS alerts or engine failures.',
+    'Cognitive fatigue indicators suggest the pilot may struggle with working memory tasks, including airspace management and frequency changes under workload.',
+  ],
+  Emotional: [
+    'Emotional instability score indicates the pilot may have difficulty maintaining composure under pressure, which is essential during abnormal and emergency procedures.',
+    'Elevated stress markers detected in emotional assessment suggest personal concerns may intrude on duty performance, reducing situational focus.',
+    'Below-threshold emotional score raises concern about the pilot\'s ability to tolerate ambiguity and make calm, rational decisions in rapidly evolving scenarios.',
+    'Poor stress management as indicated increases risk of tunnel vision — where emotional distress causes a pilot to fixate on one problem while ignoring other critical inputs.',
+    'Suboptimal emotional readiness may impair effective communication with ATC and crew during high-workload or adverse weather operations.',
+  ],
+  Physical: [
+    'Physical readiness score below threshold indicates the pilot has not met the minimum rest standard required for safe flight operations under ICAO fatigue guidelines.',
+    'Physical energy deficit detected suggests the pilot\'s reaction times may be meaningfully degraded, increasing risk during critical phases of flight such as takeoff and landing.',
+    'Inadequate rest reported in pilot profile creates a measurable fatigue burden — studies show 17+ hours of wakefulness produces impairment equivalent to a BAC of 0.05%.',
+    'Physical health indicators suggest the pilot may be experiencing pain, discomfort, or illness that distracts from full cognitive engagement with flight tasks.',
+    'Nutritional and hydration deficiency as indicated may reduce cognitive performance and physical stamina during extended flight operations.',
+  ],
+  Situational: [
+    'Situational awareness score below threshold indicates the pilot may not maintain a sufficient mental model of the flight environment to anticipate and manage developing threats.',
+    'Low situational awareness score correlates with increased risk of Controlled Flight Into Terrain (CFIT) — the leading cause of fatal aviation accidents worldwide.',
+    'Reduced risk assessment confidence as indicated may lead to poor threat prioritisation during multi-system failures or deteriorating weather scenarios.',
+    'Below-standard operational currency (NOTAMs/weather) creates risk of exposure to known hazards without adequate preparation or contingency planning.',
+    'Pilot\'s self-assessed preparedness for unexpected scenarios is below the minimum threshold required for single-pilot or reduced-crew operations.',
+  ],
+  'Social/CRM': [
+    'CRM score indicates reduced confidence in crew communication effectiveness, increasing risk that critical information will not be shared assertively during abnormal situations.',
+    'Low crew alignment score suggests possible cockpit gradient issues — where one pilot dominates decisions without appropriate cross-checking by the other crew member.',
+    'Below-threshold social domain score raises concern that the pilot may not effectively challenge erroneous decisions by senior crew members during time-critical scenarios.',
+    'Reduced crew resource management effectiveness as indicated increases vulnerability to error chains — where sequential unchecked mistakes compound into accidents.',
+    'Communication confidence deficit detected may impair the pilot\'s ability to declare emergencies clearly and concisely to ATC, delaying critical support response.',
+  ],
+  General: [
+    'Overall Flight Risk Index falls below the minimum safety threshold required for unrestricted flight operations under the AeroMind assessment protocol.',
+    'Combined domain score pattern suggests the pilot is operating at the boundary of safe performance across multiple psychological fitness dimensions simultaneously.',
+    'The composite score reflects accumulated risk factors across domains that, while individually moderate, create an elevated total risk profile when assessed together.',
+    'Assessment reveals performance degradation across domains that is consistent with pre-accident profiles identified in NTSB and AAIB accident investigation records.',
+    'Total risk score places this pilot in a category where regulatory authorities recommend mandatory supervisor review before any flight operations are authorised.',
+  ],
+};
+
+/* ══════════════════════════════════════════
+   ICAO / FAA VIOLATION DATABASE
+══════════════════════════════════════════ */
+const VIOLATIONS_DB = {
+  Cognitive: [
+    {authority:'ICAO',badge:'badge-icao',rule:'ICAO Annex 1 — §1.2.4.2',text:'Personnel conducting safety-critical aviation duties must be free from any condition that impairs cognitive or physical performance to an extent that compromises safety. A pilot with sub-threshold cognitive readiness is potentially in breach of their certificate of competency.'},
+    {authority:'FAA',badge:'badge-faa',rule:'FAA 14 CFR Part 67 — Medical Standards',text:'Pilots must meet Class 1 (ATP), Class 2 (Commercial), or Class 3 (Private) medical standards, which include the requirement to be free from any mental or psychological condition that could interfere with the safe operation of an aircraft.'},
+  ],
+  Emotional: [
+    {authority:'ICAO',badge:'badge-icao',rule:'ICAO Doc 9966 — Fatigue Risk Management',text:'Aviation authorities require operators to implement systems to detect and manage psychological impairment. Operating while emotionally compromised may constitute a violation of the duty of care required under ICAO human performance guidelines.'},
+    {authority:'FAA',badge:'badge-faa',rule:'FAA Advisory Circular AC 120-100',text:'Pilots are required to self-disclose psychological conditions including depression, anxiety disorders, or significant stress to an Aviation Medical Examiner (AME). Failure to disclose and continuing flight duties may be grounds for certificate revocation.'},
+    {authority:'FAA',badge:'badge-faa',rule:'FAA 14 CFR §61.53',text:'No person may act as pilot in command or as a required flight crew member while that person knows or has reason to know of any medical condition that would make that person unable to meet the medical certificate requirements.'},
+  ],
+  Physical: [
+    {authority:'ICAO',badge:'badge-icao',rule:'ICAO Annex 6 Part I — §4.10',text:'Operators must establish fatigue management schemes ensuring flight crew are not assigned to flight duty unless they are adequately rested and free from physical impairment. Insufficient sleep (<6 hours) before a duty period may constitute a breach.'},
+    {authority:'FAA',badge:'badge-faa',rule:'FAA 14 CFR §117 — Flight and Duty Limitations',text:'FAA mandates minimum rest periods of 10 consecutive hours before any flight duty period. Pilots must also be given an opportunity for 8 hours of uninterrupted sleep. Operating in violation of these rest requirements carries civil penalties.'},
+    {authority:'ICAO',badge:'badge-icao',rule:'ICAO Annex 1 — §1.2.4.2 (Medical Fitness)',text:'Licence holders must not exercise the privileges of their licence when their physical or mental condition is such that it renders them unable to safely exercise those privileges.'},
+  ],
+  Situational: [
+    {authority:'ICAO',badge:'badge-icao',rule:'ICAO Annex 2 — Rules of the Air §3.1',text:'The pilot in command is responsible for the safe operation of the aircraft and must maintain situational awareness of all factors affecting the safety of flight. Documented low situational awareness constitutes a safety breach.'},
+    {authority:'FAA',badge:'badge-faa',rule:'FAA 14 CFR §91.103 — Preflight Action',text:'Before any flight, the pilot in command must become familiar with all available information concerning that flight. Failure to review current NOTAMs, weather briefings, and route information is a regulatory violation.'},
+  ],
+  'Social/CRM': [
+    {authority:'ICAO',badge:'badge-icao',rule:'ICAO Annex 6 — §9.3 CRM Training',text:'All operators of multi-crew aircraft must ensure flight crew receive approved Crew Resource Management training. A pilot who cannot effectively exercise CRM may be non-compliant with operator licence conditions.'},
+    {authority:'FAA',badge:'badge-faa',rule:'FAA 14 CFR Part 121 §121.419 — CRM',text:'CRM training is mandatory for all flight crew operating under Part 121. Significant deficiency in CRM application during assessed scenarios represents a breach of the operator\'s approved training programme.'},
+  ],
+  Substance: [
+    {authority:'ICAO',badge:'badge-icao',rule:'ICAO Annex 2 — §2.5 (Alcohol)',text:'No person shall act as a crew member of an aircraft while under the influence of alcohol. The standard applied internationally by ICAO is a BAC of 0.04% or greater, or within 8 hours of consuming alcohol.'},
+    {authority:'FAA',badge:'badge-faa',rule:'FAA 14 CFR §91.17 — Alcohol and Drugs',text:'No person may act as a crew member while having a BAC of 0.04% or more; within 8 hours of consuming alcohol; under the influence of alcohol; or using any drug that affects the person\'s faculties in any way contrary to safety.'},
+    {authority:'ICAO',badge:'badge-icao',rule:'ICAO Doc 9756 — Accident Investigation Manual',text:'Toxicological testing following accidents has identified psychoactive substances including antihistamines, sedatives, and pain medications as contributing factors. ICAO Annex 1 requires pilots to report any medication to their AME.'},
+    {authority:'FAA',badge:'badge-faa',rule:'FAA 14 CFR Part 67 §67.113 — Substance Dependence',text:'A diagnosis of substance dependence disqualifies a pilot from holding any class of medical certificate until they have established a recovery record satisfactory to the FAA. Undisclosed use is a federal offence.'},
+  ],
+  Fatigue: [
+    {authority:'FAA',badge:'badge-faa',rule:'FAA 14 CFR §117.5 — Fatigue Risk Responsibility',text:'Each flight crew member must report to the certificate holder if they are too fatigued to safely perform required duties. Failure to self-declare fatigue and continuing flight duties is a regulatory violation carrying significant civil penalties.'},
+    {authority:'ICAO',badge:'badge-icao',rule:'ICAO Doc 9966 — FRMS Implementation Guide',text:'Under Fatigue Risk Management Systems, operators and crew share responsibility for managing fatigue. A crew member who knowingly flies while fatigued may be in breach of both operator SOPs and ICAO fatigue guidelines.'},
+  ],
+};
+
+/* ══════════════════════════════════════════
+   UTILITIES
+══════════════════════════════════════════ */
+function pickRandom(arr,n){const a=[...arr].sort(()=>Math.random()-0.5);return a.slice(0,n);}
+function getRand(arr){return arr[Math.floor(Math.random()*arr.length)];}
+
+/* ══════════════════════════════════════════
+   ASSESSMENT ENGINE
+══════════════════════════════════════════ */
+const DOMAIN_WEIGHTS={Cognitive:0.30,Emotional:0.20,Physical:0.25,Situational:0.15,'Social/CRM':0.10};
+let sessionQuestions=[];
+let responses={};
+let currentQIdx=0;
+let pilotProfile={};
+let substanceScore=5;
+
+function buildSession(){
+  // Pick 2 random from each domain
+  const domains=Object.keys(QUESTION_BANK);
+  sessionQuestions=[];
+  domains.forEach(d=>{
+    const picked=pickRandom(QUESTION_BANK[d],2);
+    picked.forEach(q=>sessionQuestions.push({domain:d,...q}));
+  });
+  // Shuffle
+  sessionQuestions.sort(()=>Math.random()-0.5);
+  // Add substance question at position 3 or 4 (feels natural)
+  const insertAt=Math.floor(Math.random()*3)+2;
+  sessionQuestions.splice(insertAt,0,{domain:'Substance Screen',...SUBSTANCE_QUESTION});
+  responses={};
+  substanceScore=5;
+}
+
+function renderQuestions(){
+  const container=document.getElementById('questions-container');
+  container.innerHTML='';
+  sessionQuestions.forEach((q,i)=>{
+    const block=document.createElement('div');
+    block.className='question-block'+(i===0?' active':'');
+    block.id='qblock-'+i;
+    block.innerHTML=`
+      <div class="q-domain">${q.domain} — Q${i+1} of ${sessionQuestions.length}</div>
+      <div class="q-text">${q.text}</div>
+      <div class="q-scale">
+        ${[1,2,3,4,5].map(v=>`<button class="scale-btn" onclick="selectAnswer(${i},${v},this)">${v}</button>`).join('')}
+      </div>
+      <div class="scale-labels"><span>Very Low / Yes</span><span></span><span>Moderate</span><span></span><span>Very High / None</span></div>`;
+    container.appendChild(block);
+  });
+}
+
+function selectAnswer(qIdx,value,btn){
+  const q=sessionQuestions[qIdx];
+  responses[qIdx]=value;
+  if(q.isSubstance){
+    substanceScore=value;
+    const warn=document.getElementById('alcohol-warning');
+    warn.style.display=value<=2?'block':'none';
+  }
+  const block=document.getElementById('qblock-'+qIdx);
+  block.querySelectorAll('.scale-btn').forEach(b=>b.classList.remove('selected'));
+  btn.classList.add('selected');
+  document.getElementById('btn-next').disabled=false;
+}
+
+function updateProgress(){
+  const pct=(currentQIdx/sessionQuestions.length)*100;
+  document.getElementById('q-progress-fill').style.width=pct+'%';
+  document.getElementById('q-progress-text').textContent=`Question ${currentQIdx+1} of ${sessionQuestions.length}`;
+  document.getElementById('q-domain-text').textContent=sessionQuestions[currentQIdx].domain;
+}
+
+function showQuestion(idx){
+  document.querySelectorAll('.question-block').forEach(b=>b.classList.remove('active'));
+  document.getElementById('qblock-'+idx).classList.add('active');
+  document.getElementById('btn-prev').disabled=idx===0;
+  document.getElementById('btn-next').disabled=responses[idx]===undefined;
+  document.getElementById('btn-next').textContent=idx===sessionQuestions.length-1?'Calculate Results ✈':'Next →';
+  // Show alcohol warning if already answered low
+  const q=sessionQuestions[idx];
+  const warn=document.getElementById('alcohol-warning');
+  if(q.isSubstance&&responses[idx]!==undefined&&responses[idx]<=2){warn.style.display='block';}
+  else{warn.style.display='none';}
+  updateProgress();
+}
+
+function nextQuestion(){
+  if(responses[currentQIdx]===undefined)return;
+  if(currentQIdx===sessionQuestions.length-1){showResults();return;}
+  currentQIdx++;showQuestion(currentQIdx);
+}
+
+function prevQuestion(){
+  if(currentQIdx===0)return;
+  currentQIdx--;showQuestion(currentQIdx);
+}
+
+function startAssessment(){
+  const name=document.getElementById('inp-name').value.trim()||'Anonymous';
+  const rank=document.getElementById('inp-rank').value.trim()||'Pilot';
+  const flight=document.getElementById('inp-flight').value.trim()||'N/A';
+  const sleep=parseInt(document.getElementById('inp-sleep').value)||7;
+  const duty=parseInt(document.getElementById('inp-duty').value)||0;
+  pilotProfile={name,rank,flight,sleep,duty};
+  buildSession();
+  renderQuestions();
+  currentQIdx=0;
+  document.getElementById('step-profile').style.display='none';
+  document.getElementById('step-questions').style.display='block';
+  showQuestion(0);
+}
+
+/* ══════════════════════════════════════════
+   RESULTS ENGINE
+══════════════════════════════════════════ */
+function showResults(){
+  document.getElementById('step-questions').style.display='none';
+  document.getElementById('step-result').style.display='block';
+
+  const domains=Object.keys(DOMAIN_WEIGHTS);
+  const domAvg={};
+  domains.forEach(d=>{
+    const qs=sessionQuestions.reduce((a,q,i)=>q.domain===d?[...a,i]:a,[]);
+    if(qs.length===0){domAvg[d]=3;return;}
+    domAvg[d]=qs.reduce((s,i)=>s+(responses[i]||3),0)/qs.length;
+  });
+
+  // Weighted FRI
+  let weighted=0;
+  domains.forEach(d=>{weighted+=domAvg[d]*DOMAIN_WEIGHTS[d];});
+  let fri=(weighted/5)*100;
+
+  // Fatigue penalty
+  const sleepDebt=Math.max(0,8-pilotProfile.sleep);
+  const fatigue=Math.min(10,sleepDebt*0.8+(pilotProfile.duty/24)*5+(5-domAvg['Physical'])*0.8+(5-domAvg['Cognitive'])*0.5);
+  fri-=fatigue*2.5;
+  if(pilotProfile.duty>10)fri-=(pilotProfile.duty-10)*1.5;
+
+  // Substance penalty
+  let substanceFail=false;
+  if(substanceScore<=2){fri=Math.min(fri,25);substanceFail=true;}
+  else if(substanceScore===3){fri-=15;}
+
+  fri=Math.max(0,Math.min(100,fri));
+  const friInt=Math.round(fri);
+
+  const overallAvg=Object.values(responses).reduce((a,b)=>a+b,0)/Object.values(responses).length;
+  let mood;
+  if(overallAvg>=4.5)mood='VERY POSITIVE';
+  else if(overallAvg>=3.5)mood='POSITIVE';
+  else if(overallAvg>=2.5)mood='NEUTRAL';
+  else if(overallAvg>=1.5)mood='STRESSED';
+  else mood='AT RISK';
+
+  let riskColor,riskLabel,goNoGoBg,goNoGoText,recText;
+  if(substanceFail){
+    riskColor='var(--red)';riskLabel='GROUNDED — SUBSTANCE DETECTED';
+    goNoGoBg='var(--red)';goNoGoText='var(--text)';
+    recText='CRITICAL: Substance or impairing medication usage declared. Pilot is immediately disqualified from all flight duties. ICAO Annex 2 §2.5 and FAA 14 CFR §91.17 apply. Aviation Medical Officer referral is mandatory.';
+  } else if(friInt>=85){
+    riskColor='var(--green)';riskLabel='CLEAR FOR FLIGHT';
+    goNoGoBg='var(--green)';goNoGoText='var(--bg)';
+    recText='All domains are above threshold. Pilot is fully fit for operations. Proceed with normal pre-flight checklist and briefings.';
+  } else if(friInt>=70){
+    riskColor='var(--cyan)';riskLabel='LOW RISK';
+    goNoGoBg='var(--cyan)';goNoGoText='var(--bg)';
+    recText='Minor sub-threshold scores detected. Pilot is cleared — a targeted domain review before flight is recommended.';
+  } else if(friInt>=55){
+    riskColor='var(--yellow)';riskLabel='MODERATE RISK — SUPERVISOR REVIEW';
+    goNoGoBg='var(--yellow)';goNoGoText='#020408';
+    recText='Conditional GO. One or more domains require attention. Supervisor review is mandatory before flight clearance is granted.';
+  } else if(friInt>=35){
+    riskColor='var(--orange)';riskLabel='HIGH RISK — NO-GO';
+    goNoGoBg='var(--orange)';goNoGoText='var(--bg)';
+    recText='Significant psychological concerns detected across multiple domains. Pilot should NOT fly. Full re-assessment after rest required.';
+  } else {
+    riskColor='var(--red)';riskLabel='GROUNDED — CRITICAL';
+    goNoGoBg='var(--red)';goNoGoText='var(--text)';
+    recText='CRITICAL: Immediate removal from flight duties. Refer to aviation medical officer. Do not clear for any flight operations.';
+  }
+
+  // Render score
+  const scoreEl=document.getElementById('res-fri-score');
+  scoreEl.style.color=riskColor;
+  scoreEl.textContent=friInt;
+  const statusEl=document.getElementById('res-fri-status');
+  statusEl.textContent=riskLabel;
+  statusEl.style.background=riskColor+'22';
+  statusEl.style.color=riskColor;
+  statusEl.style.border='1px solid '+riskColor+'44';
+
+  // Domain bars
+  const domContainer=document.getElementById('res-domains');
+  domContainer.innerHTML=domains.map(d=>`
+    <div class="dr-row">
+      <span class="dr-label">${d}</span>
+      <div class="dr-track"><div class="dr-fill" style="width:0%" data-w="${(domAvg[d]/5*100).toFixed(0)}"></div></div>
+      <span class="dr-val">${domAvg[d].toFixed(1)}</span>
+    </div>`).join('');
+  setTimeout(()=>{domContainer.querySelectorAll('.dr-fill').forEach(f=>{f.style.width=f.dataset.w+'%';});},100);
+
+  document.getElementById('res-fatigue').textContent=fatigue.toFixed(1)+'/10';
+  document.getElementById('res-mood').textContent=mood;
+  document.getElementById('res-avg').textContent=overallAvg.toFixed(2)+'/5';
+  document.getElementById('res-rec-text').textContent=recText;
+
+  const goBtn=document.getElementById('res-gonogo');
+  if(substanceFail||friInt<35){goBtn.textContent='✖ NO-GO — GROUNDED';}
+  else if(friInt>=70){goBtn.textContent='✈ GO — Cleared for Operations';}
+  else if(friInt>=55){goBtn.textContent='⚠ Conditional GO — Supervisor Review Required';}
+  else{goBtn.textContent='✖ NO-GO — Grounded';}
+  goBtn.style.background=goNoGoBg;
+  goBtn.style.color=goNoGoText;
+
+  // Only show adverse sections if FRI < 70
+  const isUnfit=friInt<70||substanceFail;
+
+  if(isUnfit){
+    // Find weakest domains
+    const weakDomains=domains.filter(d=>domAvg[d]<3.5).sort((a,b)=>domAvg[a]-domAvg[b]);
+    const showDomains=weakDomains.length>0?weakDomains:domains.sort((a,b)=>domAvg[a]-domAvg[b]).slice(0,2);
+
+    // REASONS
+    const reasonsEl=document.getElementById('res-reasons');
+    const reasonsList=document.getElementById('res-reasons-list');
+    reasonsEl.style.display='block';
+    const pickedReasons=[];
+    showDomains.slice(0,2).forEach(d=>{
+      const pool=REASON_POOLS[d]||[];
+      pickedReasons.push(...pickRandom(pool,2));
+    });
+    pickedReasons.push(...pickRandom(REASON_POOLS.General,1));
+    const finalReasons=pickRandom(pickedReasons,Math.min(4,pickedReasons.length));
+    reasonsList.innerHTML=finalReasons.map((r,i)=>`
+      <div class="reason-item">
+        <span class="reason-num">${String(i+1).padStart(2,'0')}.</span>
+        <span class="reason-text">${r}</span>
+      </div>`).join('');
+
+    // CRASHES
+    const crashesEl=document.getElementById('res-crashes');
+    const crashesList=document.getElementById('res-crashes-list');
+    crashesEl.style.display='block';
+    const crashDomain=showDomains[0];
+    const availableCrashes=CRASH_DB[crashDomain]||CRASH_DB['Cognitive'];
+    const pickedCrashes=pickRandom(availableCrashes,2);
+    crashesList.innerHTML=pickedCrashes.map(c=>`
+      <div class="crash-item">
+        <div class="crash-flight">${c.flight}</div>
+        <div class="crash-desc">${c.desc}</div>
+        <span class="crash-match">Domain Match: ${c.match}</span>
+      </div>`).join('');
+
+    // VIOLATIONS
+    const violationsEl=document.getElementById('res-violations');
+    const violationsList=document.getElementById('res-violations-list');
+    violationsEl.style.display='block';
+    const applicableViolations=[];
+    showDomains.forEach(d=>{if(VIOLATIONS_DB[d])applicableViolations.push(...VIOLATIONS_DB[d]);});
+    if(substanceFail)applicableViolations.unshift(...VIOLATIONS_DB.Substance);
+    if(pilotProfile.sleep<6||pilotProfile.duty>10)applicableViolations.push(...VIOLATIONS_DB.Fatigue);
+    const finalViolations=pickRandom(applicableViolations,Math.min(4,applicableViolations.length));
+    violationsList.innerHTML=finalViolations.map(v=>`
+      <div class="violation-item">
+        <span class="violation-badge ${v.badge}">${v.authority}</span>
+        <div>
+          <div class="violation-rule">${v.rule}</div>
+          <div class="violation-text">${v.text}</div>
+        </div>
+      </div>`).join('');
+  } else {
+    document.getElementById('res-crashes').style.display='none';
+    document.getElementById('res-violations').style.display='none';
+    document.getElementById('res-reasons').style.display='none';
+  }
+}
+
+function resetAssessment(){
+  responses={};currentQIdx=0;
+  document.getElementById('step-result').style.display='none';
+  document.getElementById('step-profile').style.display='block';
+  document.getElementById('alcohol-warning').style.display='none';
+  ['inp-name','inp-rank','inp-flight','inp-sleep','inp-duty'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el)el.value='';
+  });
+  // Pre-fill name if logged in
+  if(currentUser&&currentUser.fname){
+    document.getElementById('inp-name').value=`${currentUser.fname} ${currentUser.lname}`.trim();
+  }
+}
+</script>
+</body>
+</html>
